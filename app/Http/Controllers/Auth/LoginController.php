@@ -20,18 +20,20 @@ class LoginController extends Controller
             'password' => ['required'],
         ]);
 
-        // Attempt auth
-        if (Auth::attempt($credentials)) {
-            // Block inactive users even if credentials are correct
-            if (! Auth::user()->is_active) {
-                Auth::logout();
-                return back()->withErrors(['email' => 'Ваша учётная запись деактивирована.']);
-            }
-            $request->session()->regenerate();
-            return redirect()->intended('/dashboard');
+        // Find user manually so we can check is_active BEFORE creating a session
+        $user = \App\Models\User::where('email', $credentials['email'])->first();
+
+        if (! $user || ! \Illuminate\Support\Facades\Hash::check($credentials['password'], $user->password)) {
+            return back()->withErrors(['email' => 'Неверный email или пароль.']);
         }
 
-        return back()->withErrors(['email' => 'Неверный email или пароль.']);
+        if (! $user->is_active) {
+            return back()->withErrors(['email' => 'Ваша учётная запись деактивирована.']);
+        }
+
+        \Illuminate\Support\Facades\Auth::login($user);
+        $request->session()->regenerate();
+        return redirect()->intended('/dashboard');
     }
 
     public function logout(Request $request)
