@@ -18,4 +18,14 @@ enum RoomStatus: string
             self::Maintenance => 'Обслуживание',
         };
     }
+
+    public function color(): string
+    {
+        return match($this) {
+            self::Available   => 'green',
+            self::Occupied    => 'red',
+            self::Cleaning    => 'yellow',
+            self::Maintenance => 'gray',
+        };
+    }
 }
