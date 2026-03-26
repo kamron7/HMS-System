@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::create('rooms', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('room_type_id')->constrained('room_types')->cascadeOnDelete();
-            $table->string('number', 10);
+            $table->foreignId('room_type_id')->constrained('room_types')->restrictOnDelete();
+            $table->string('number', 10)->unique();
             $table->integer('floor')->nullable();
             $table->string('status')->default('available');
             $table->text('notes')->nullable();

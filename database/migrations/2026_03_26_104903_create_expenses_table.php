@@ -17,10 +17,10 @@ return new class extends Migration
             $table->text('description');
             $table->decimal('amount', 12, 2);
             $table->date('expense_date');
-            $table->unsignedBigInteger('created_by');
+            $table->foreignId('created_by')->constrained('users')->restrictOnDelete();
             $table->timestamps();
 
-            $table->foreign('created_by')->references('id')->on('users')->restrictOnDelete();
+            $table->index('expense_date');
         });
     }
 

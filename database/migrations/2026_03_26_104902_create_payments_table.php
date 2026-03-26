@@ -19,6 +19,8 @@ return new class extends Migration
             $table->timestamp('paid_at');
             $table->text('notes')->nullable();
             $table->timestamps();
+
+            $table->index('paid_at');
         });
     }
 

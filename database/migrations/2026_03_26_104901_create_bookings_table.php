@@ -22,12 +22,10 @@ return new class extends Migration
             $table->string('status')->default('pending');
             $table->decimal('total_price', 12, 2);
             $table->text('notes')->nullable();
-            $table->unsignedBigInteger('created_by');
+            $table->foreignId('created_by')->constrained('users')->restrictOnDelete();
             $table->timestamps();
 
-            $table->foreign('created_by')->references('id')->on('users')->restrictOnDelete();
             $table->index(['room_id', 'check_in_date', 'check_out_date']);
-            $table->index('guest_id');
             $table->index('status');
             $table->index('check_in_date');
         });
