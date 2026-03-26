@@ -1,0 +1,26 @@
+<?php
+
+namespace Database\Factories;
+
+use App\Models\Guest;
+use Illuminate\Database\Eloquent\Factories\Factory;
+
+/**
+ * @extends Factory<Guest>
+ */
+class GuestFactory extends Factory
+{
+    protected $model = Guest::class;
+
+    public function definition(): array
+    {
+        return [
+            'first_name'      => fake()->firstName(),
+            'last_name'       => fake()->lastName(),
+            'phone'           => '+998' . fake()->numerify('## ### ## ##'),
+            'email'           => fake()->optional()->safeEmail(),
+            'passport_number' => fake()->optional()->bothify('??#######'),
+            'nationality'     => fake()->optional()->country(),
+        ];
+    }
+}
