@@ -59,9 +59,10 @@ class Booking extends Model
 
     public function paymentStatus(): string
     {
-        $paid = $this->payments()->sum('amount');
+        $paid = (float) $this->payments()->sum('amount');
+        $total = (float) $this->total_price;
         if ($paid <= 0) return 'unpaid';
-        if ($paid < $this->total_price) return 'partial';
+        if ($paid < $total) return 'partial';
         return 'paid';
     }
 }

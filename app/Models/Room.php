@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\BookingStatus;
 use App\Enums\RoomStatus;
 use Database\Factories\RoomFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -42,7 +43,10 @@ class Room extends Model
     public function isAvailable(string $checkIn, string $checkOut): bool
     {
         return ! $this->bookings()
-            ->whereNotIn('status', ['cancelled', 'checked_out'])
+            ->whereNotIn('status', [
+                BookingStatus::Cancelled->value,
+                BookingStatus::CheckedOut->value,
+            ])
             ->where('check_in_date', '<', $checkOut)
             ->where('check_out_date', '>', $checkIn)
             ->exists();

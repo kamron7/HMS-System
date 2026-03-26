@@ -61,4 +61,19 @@ class BookingStatusTest extends TestCase
     {
         $this->assertFalse(BookingStatus::Cancelled->canTransitionTo(BookingStatus::Pending));
     }
+
+    public function test_pending_cannot_transition_to_checked_out(): void
+    {
+        $this->assertFalse(BookingStatus::Pending->canTransitionTo(BookingStatus::CheckedOut));
+    }
+
+    public function test_confirmed_cannot_transition_to_pending(): void
+    {
+        $this->assertFalse(BookingStatus::Confirmed->canTransitionTo(BookingStatus::Pending));
+    }
+
+    public function test_checked_in_cannot_transition_to_confirmed(): void
+    {
+        $this->assertFalse(BookingStatus::CheckedIn->canTransitionTo(BookingStatus::Confirmed));
+    }
 }
