@@ -60,13 +60,18 @@
                 </a>
             @endif
 
-            @if($room->status === \App\Enums\RoomStatus::Cleaning || $room->status === \App\Enums\RoomStatus::Occupied)
+            @if($room->status === \App\Enums\RoomStatus::Cleaning || $room->status === \App\Enums\RoomStatus::Maintenance)
             <form method="POST" action="{{ route('housekeeping.update', $room) }}" @click.stop>
                 @csrf @method('PATCH')
                 @if($room->status === \App\Enums\RoomStatus::Cleaning)
                     <input type="hidden" name="status" value="available">
                     <button type="submit" class="w-full bg-green-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-green-700">
                         ✅ Отметить свободным
+                    </button>
+                @elseif($room->status === \App\Enums\RoomStatus::Maintenance)
+                    <input type="hidden" name="status" value="available">
+                    <button type="submit" class="w-full bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-blue-700">
+                        ✅ Завершить ремонт
                     </button>
                 @endif
             </form>

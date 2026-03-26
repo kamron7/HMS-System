@@ -15,7 +15,7 @@ enum RoomStatus: string
             self::Available   => 'Свободен',
             self::Occupied    => 'Занят',
             self::Cleaning    => 'Уборка',
-            self::Maintenance => 'Обслуживание',
+            self::Maintenance => 'Ремонт',
         };
     }
 

@@ -13,19 +13,18 @@
     @php
         $tabs = [
             null              => 'Все',
-            'available'       => 'Свободен',
-            'occupied'        => 'Занят',
-            'cleaning'        => 'Уборка',
-            'maintenance'     => 'Ремонт',
+            'available'       => \App\Enums\RoomStatus::Available->label(),
+            'occupied'        => \App\Enums\RoomStatus::Occupied->label(),
+            'cleaning'        => \App\Enums\RoomStatus::Cleaning->label(),
+            'maintenance'     => \App\Enums\RoomStatus::Maintenance->label(),
         ];
 
-        $allRooms = \App\Models\Room::all();
-        $counts = [
-            null          => $allRooms->count(),
-            'available'   => $allRooms->where('status', \App\Enums\RoomStatus::Available)->count(),
-            'occupied'    => $allRooms->where('status', \App\Enums\RoomStatus::Occupied)->count(),
-            'cleaning'    => $allRooms->where('status', \App\Enums\RoomStatus::Cleaning)->count(),
-            'maintenance' => $allRooms->where('status', \App\Enums\RoomStatus::Maintenance)->count(),
+        $tabCounts = [
+            null          => $counts['all'],
+            'available'   => $counts['available'],
+            'occupied'    => $counts['occupied'],
+            'cleaning'    => $counts['cleaning'],
+            'maintenance' => $counts['maintenance'],
         ];
     @endphp
 
@@ -43,7 +42,7 @@
                 {{ $label }}
                 <span class="inline-flex items-center justify-center w-5 h-5 text-xs rounded-full
                              {{ $isActive ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600' }}">
-                    {{ $counts[$value] ?? 0 }}
+                    {{ $tabCounts[$value] ?? 0 }}
                 </span>
             </a>
         @endforeach
@@ -57,9 +56,18 @@
     @else
         @foreach($rooms as $floor => $floorRooms)
             <div class="mb-8">
+                @php
+                    $cnt = $floorRooms->count();
+                    $n = $cnt % 100;
+                    $n1 = $n % 10;
+                    if ($n > 10 && $n < 20) $word = 'номеров';
+                    elseif ($n1 > 1 && $n1 < 5) $word = 'номера';
+                    elseif ($n1 === 1) $word = 'номер';
+                    else $word = 'номеров';
+                @endphp
                 <h2 class="text-base font-semibold text-gray-700 mb-3">
                     Этаж {{ $floor }}
-                    <span class="text-sm font-normal text-gray-400">({{ $floorRooms->count() }} {{ trans_choice('номер|номера|номеров', $floorRooms->count()) }})</span>
+                    <span class="text-sm font-normal text-gray-400">({{ $cnt }} {{ $word }})</span>
                 </h2>
                 <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
                     @foreach($floorRooms as $room)

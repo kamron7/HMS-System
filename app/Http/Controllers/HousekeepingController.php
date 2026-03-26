@@ -24,7 +24,15 @@ class HousekeepingController extends Controller
             ->get()
             ->groupBy('floor');
 
-        return view('housekeeping.index', compact('rooms', 'statusFilter'));
+        $counts = [
+            'all'         => Room::count(),
+            'available'   => Room::where('status', RoomStatus::Available->value)->count(),
+            'occupied'    => Room::where('status', RoomStatus::Occupied->value)->count(),
+            'cleaning'    => Room::where('status', RoomStatus::Cleaning->value)->count(),
+            'maintenance' => Room::where('status', RoomStatus::Maintenance->value)->count(),
+        ];
+
+        return view('housekeeping.index', compact('rooms', 'statusFilter', 'counts'));
     }
 
     public function update(Request $request, Room $room)
