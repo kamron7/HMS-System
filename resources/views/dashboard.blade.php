@@ -16,18 +16,22 @@
         <x-stat-card
             title="Свободно"
             value="{{ $roomStats['available'] }} из {{ $roomStats['total'] }}"
+            color="green"
         />
         <x-stat-card
             title="Занято"
             value="{{ $roomStats['occupied'] }}"
+            color="red"
         />
         <x-stat-card
             title="Уборка"
             value="{{ $roomStats['cleaning'] }}"
+            color="yellow"
         />
         <x-stat-card
             title="Загрузка"
             value="{{ $occupancyRate }}%"
+            color="blue"
         />
     </div>
 </section>
