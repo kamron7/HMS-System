@@ -15,7 +15,7 @@
 </div>
 
 {{-- Filter bar --}}
-<form method="GET" action="{{ route('bookings.index') }}" class="mb-6">
+<form method="GET" action="{{ route('bookings.index') }}" class="mb-6 sticky top-0 z-10">
     <div class="flex flex-wrap gap-3 items-end bg-white border border-gray-200 rounded-xl px-4 py-3">
         {{-- Search --}}
         <div class="flex-1 min-w-48">
