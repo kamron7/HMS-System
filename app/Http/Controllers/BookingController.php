@@ -4,7 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Enums\BookingStatus;
 use App\Models\Booking;
+use App\Models\Room;
+use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
 class BookingController extends Controller
@@ -63,14 +67,46 @@ class BookingController extends Controller
         return view('bookings.show', compact('booking', 'paymentStatus'));
     }
 
-    public function create()
+    public function create(): View
     {
-        abort(404);
+        return view('bookings.create');
     }
 
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
-        abort(404);
+        $validated = $request->validate([
+            'room_id'        => ['required', 'integer', 'exists:rooms,id'],
+            'guest_id'       => ['required', 'integer', 'exists:guests,id'],
+            'check_in_date'  => ['required', 'date', 'after_or_equal:today'],
+            'check_out_date' => ['required', 'date', 'after:check_in_date'],
+            'adults'         => ['required', 'integer', 'min:1', 'max:20'],
+            'children'       => ['nullable', 'integer', 'min:0', 'max:20'],
+            'notes'          => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $room = Room::findOrFail($validated['room_id']);
+
+        if (! $room->isAvailable($validated['check_in_date'], $validated['check_out_date'])) {
+            return back()
+                ->withErrors(['room_id' => 'Этот номер уже занят на выбранные даты.'])
+                ->withInput();
+        }
+
+        $room->load('roomType');
+
+        $nights     = Carbon::parse($validated['check_in_date'])->diffInDays(Carbon::parse($validated['check_out_date']));
+        $totalPrice = $nights * $room->roomType->base_price;
+
+        $booking = Booking::create([
+            ...$validated,
+            'children'    => $validated['children'] ?? 0,
+            'status'      => BookingStatus::Pending->value,
+            'total_price' => $totalPrice,
+            'created_by'  => Auth::id(),
+        ]);
+
+        return redirect()->route('bookings.show', $booking)
+            ->with('success', 'Бронирование создано');
     }
 
     public function edit(Booking $booking)
