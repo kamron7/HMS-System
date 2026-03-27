@@ -48,9 +48,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/housekeeping', [HousekeepingController::class, 'index'])->name('housekeeping.index');
     Route::patch('/housekeeping/{room}', [HousekeepingController::class, 'update'])->name('housekeeping.update');
 
-    // Payments (all roles)
-    Route::post('/payments', [PaymentController::class, 'store'])->name('payments.store');
-    Route::delete('/payments/{payment}', [PaymentController::class, 'destroy'])->name('payments.destroy');
+    // Payments (all roles) — append-only, no edit or delete
+    Route::post('/bookings/{booking}/payments', [PaymentController::class, 'store'])->name('payments.store');
 
     // Owner + Manager only
     Route::middleware('role:owner,manager')->group(function () {

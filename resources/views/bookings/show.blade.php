@@ -130,6 +130,52 @@
             </table>
         </div>
 
+        {{-- Add payment form --}}
+        @if($booking->status !== \App\Enums\BookingStatus::Cancelled)
+        <form method="POST" action="{{ route('payments.store', $booking) }}" class="mt-4 bg-gray-50 border border-gray-200 rounded-xl p-4">
+            @csrf
+            <h4 class="text-sm font-semibold text-gray-700 mb-3">Добавить платёж</h4>
+            <div class="grid grid-cols-2 gap-3">
+                {{-- Amount --}}
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Сумма (сум)</label>
+                    <input type="number" name="amount" step="0.01" min="0.01" value="{{ old('amount') }}"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    @error('amount')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                </div>
+                {{-- Method --}}
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Способ оплаты</label>
+                    <select name="method" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                        <option value="">— выберите —</option>
+                        <option value="cash" @selected(old('method') === 'cash')>Наличные</option>
+                        <option value="card" @selected(old('method') === 'card')>Карта</option>
+                        <option value="transfer" @selected(old('method') === 'transfer')>Перевод</option>
+                        <option value="other" @selected(old('method') === 'other')>Другое</option>
+                    </select>
+                    @error('method')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                </div>
+                {{-- Date --}}
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Дата оплаты</label>
+                    <input type="date" name="paid_at" value="{{ old('paid_at', now()->format('Y-m-d')) }}"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                    @error('paid_at')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                </div>
+                {{-- Notes --}}
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Заметка (необязательно)</label>
+                    <input type="text" name="notes" value="{{ old('notes') }}"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                    @error('notes')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                </div>
+            </div>
+            <button type="submit" class="mt-3 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition">
+                + Добавить платёж
+            </button>
+        </form>
+        @endif
+
         {{-- Meta info --}}
         <div class="text-xs text-gray-400 px-1">
             Создано: {{ $booking->creator->name ?? '—' }} · {{ $booking->created_at->format('d.m.Y H:i') }}
