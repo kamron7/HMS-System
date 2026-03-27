@@ -30,8 +30,11 @@ class FinancesController extends Controller
         // Parse period (default: current month)
         $period = $request->query('period', now()->format('Y-m'));
         $parts  = explode('-', $period);
-        $start  = Carbon::create($parts[0], $parts[1], 1)->startOfMonth();
-        $end    = $start->copy()->endOfMonth();
+        if (count($parts) !== 2 || !is_numeric($parts[0]) || !is_numeric($parts[1])) {
+            $parts = [now()->year, now()->month];
+        }
+        $start = Carbon::create((int) $parts[0], (int) $parts[1], 1)->startOfMonth();
+        $end   = $start->copy()->endOfMonth();
 
         // Custom range override
         if ($request->has('start') && $request->has('end')) {
