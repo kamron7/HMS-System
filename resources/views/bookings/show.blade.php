@@ -192,19 +192,26 @@
             @endif
         </div>
 
-        {{-- Quick actions (placeholder — will be wired in Task 3.4) --}}
+        {{-- Quick actions --}}
         <div class="bg-white rounded-xl border border-gray-200 p-5">
             <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Действия</h2>
             <div class="space-y-2">
-                <a href="{{ route('bookings.edit', $booking) }}"
-                   class="block w-full text-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition">
-                    Редактировать
-                </a>
-                @if(!in_array($booking->status, [\App\Enums\BookingStatus::Cancelled, \App\Enums\BookingStatus::CheckedOut]))
-                    <button type="button"
-                            class="block w-full text-center px-4 py-2 bg-red-50 text-red-600 text-sm font-medium rounded-lg border border-red-200 hover:bg-red-100 transition">
-                        Отменить
-                    </button>
+                @if(in_array($booking->status, [\App\Enums\BookingStatus::Pending, \App\Enums\BookingStatus::Confirmed]))
+                    <a href="{{ route('bookings.edit', $booking) }}"
+                       class="block w-full text-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition">
+                        Редактировать
+                    </a>
+                @endif
+                @if($booking->status->canTransitionTo(\App\Enums\BookingStatus::Cancelled))
+                    <form method="POST" action="{{ route('bookings.status', $booking) }}">
+                        @csrf
+                        <input type="hidden" name="transition" value="cancelled">
+                        <button type="submit"
+                                class="w-full border border-red-300 text-red-600 rounded-lg px-4 py-2 text-sm font-medium hover:bg-red-50"
+                                onclick="return confirm('Отменить бронирование?')">
+                            Отменить бронирование
+                        </button>
+                    </form>
                 @endif
             </div>
         </div>

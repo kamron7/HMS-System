@@ -111,14 +111,59 @@ class BookingController extends Controller
             ->with('success', 'Бронирование создано');
     }
 
-    public function edit(Booking $booking)
+    public function edit(Booking $booking): RedirectResponse|View
     {
-        abort(404);
+        if (!in_array($booking->status, [BookingStatus::Pending, BookingStatus::Confirmed])) {
+            return redirect()->route('bookings.show', $booking)
+                ->with('error', 'Нельзя редактировать бронирование в текущем статусе.');
+        }
+
+        $booking->load(['guest', 'room.roomType']);
+
+        return view('bookings.edit', compact('booking'));
     }
 
-    public function update(Request $request, Booking $booking)
+    public function update(Request $request, Booking $booking): RedirectResponse
     {
-        abort(404);
+        $validated = $request->validate([
+            'check_in_date'  => ['required', 'date'],
+            'check_out_date' => ['required', 'date', 'after:check_in_date'],
+            'adults'         => ['required', 'integer', 'min:1', 'max:20'],
+            'children'       => ['nullable', 'integer', 'min:0', 'max:20'],
+            'notes'          => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        if (!in_array($booking->status, [BookingStatus::Pending, BookingStatus::Confirmed])) {
+            return redirect()->route('bookings.show', $booking)
+                ->with('error', 'Нельзя редактировать бронирование в текущем статусе.');
+        }
+
+        $conflicting = Booking::where('room_id', $booking->room_id)
+            ->where('id', '!=', $booking->id)
+            ->whereNotIn('status', [BookingStatus::Cancelled->value, BookingStatus::CheckedOut->value])
+            ->where('check_in_date', '<', $validated['check_out_date'])
+            ->where('check_out_date', '>', $validated['check_in_date'])
+            ->exists();
+
+        if ($conflicting) {
+            return back()->withErrors(['check_in_date' => 'Номер занят на выбранные даты.'])->withInput();
+        }
+
+        $booking->load('room.roomType');
+        $nights     = Carbon::parse($validated['check_in_date'])->diffInDays(Carbon::parse($validated['check_out_date']));
+        $totalPrice = $nights * $booking->room->roomType->base_price;
+
+        $booking->update([
+            'check_in_date'  => $validated['check_in_date'],
+            'check_out_date' => $validated['check_out_date'],
+            'adults'         => $validated['adults'],
+            'children'       => $validated['children'] ?? 0,
+            'notes'          => $validated['notes'],
+            'total_price'    => $totalPrice,
+        ]);
+
+        return redirect()->route('bookings.show', $booking)
+            ->with('success', 'Бронирование обновлено');
     }
 
     public function updateStatus(Request $request, Booking $booking): RedirectResponse
