@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Enums\BookingStatus;
+use App\Enums\RoomStatus;
 use App\Models\Booking;
 use App\Models\Room;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
@@ -119,8 +121,31 @@ class BookingController extends Controller
         abort(404);
     }
 
-    public function updateStatus(Request $request, Booking $booking)
+    public function updateStatus(Request $request, Booking $booking): RedirectResponse
     {
-        abort(404);
+        $request->validate([
+            'transition' => ['required', 'string', Rule::in(array_column(BookingStatus::cases(), 'value'))],
+        ]);
+
+        $target = BookingStatus::from($request->transition);
+
+        if (!$booking->status->canTransitionTo($target)) {
+            return back()->with('error', 'Недопустимый переход статуса.');
+        }
+
+        $booking->status = $target;
+        $booking->save();
+
+        $room = $booking->room;
+        match($target) {
+            BookingStatus::CheckedIn  => $room->update(['status' => RoomStatus::Occupied->value]),
+            BookingStatus::CheckedOut => $room->update(['status' => RoomStatus::Cleaning->value]),
+            BookingStatus::Cancelled  => $room->status === RoomStatus::Occupied
+                ? $room->update(['status' => RoomStatus::Available->value])
+                : null,
+            default => null,
+        };
+
+        return back()->with('success', "Статус бронирования обновлён: {$target->label()}");
     }
 }
