@@ -28,8 +28,10 @@ class ExpenseController extends Controller
         }
 
         if ($month = $request->query('month')) {
-            [$year, $monthNum] = explode('-', $month);
-            $query->whereYear('expense_date', $year)->whereMonth('expense_date', $monthNum);
+            $parts = explode('-', $month);
+            if (count($parts) === 2 && is_numeric($parts[0]) && is_numeric($parts[1])) {
+                $query->whereYear('expense_date', $parts[0])->whereMonth('expense_date', $parts[1]);
+            }
         }
 
         $total = (clone $query)->sum('amount');
