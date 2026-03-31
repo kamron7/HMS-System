@@ -454,18 +454,220 @@ created_at, updated_at
 
 ---
 
+## Enhancements to Existing Phases
+
+### Phase 1 Enhancements
+
+**Inspected Room Status**
+
+`RoomStatus` enum gains `inspected` between `cleaning` and `available`. Full housekeeping lifecycle:
+```
+occupied → dirty → cleaning → inspected → available
+```
+- Check-in is blocked with a clear error if room status is not `available` or `inspected`
+- Housekeeping grid: supervisors can mark a cleaned room as `inspected`
+- `RoomStatus` values: `available`, `occupied`, `cleaning`, `inspected`, `dirty`, `maintenance`
+
+**Concurrency / Race Conditions**
+
+When staff accepts an inquiry (moves it to `pending`), the acceptance wraps in `DB::transaction()` with `lockForUpdate()` on the availability query. If a conflicting booking is detected mid-transaction, a `409` flash error is returned: "Этот номер уже занят на выбранные даты — попробуйте другой номер."
+
+Same lock applied when the public client portal submits a booking.
+
+### Phase 3 Enhancement
+
+**Smart Polling for Notifications**
+
+A small Alpine.js snippet in `layouts/app.blade.php` pings `GET /notifications/count` every 30 seconds via `fetch()`. If the returned count differs from the current badge value, the bell badge updates and a subtle toast slides in: "Новый запрос от клиента." No page reload. The endpoint is lightweight (single `COUNT` query, cached 25 seconds).
+
+### Phase 4 Enhancement
+
+**Split Payments / Deposits**
+
+`payments` table gains a `type` enum column:
+- `prepayment` — counts toward balance due (default for all existing payments)
+- `deposit` — refundable security deposit; does not reduce balance due
+
+`BookingTotalsService::balanceDue()` only subtracts `prepayment` rows. Invoice shows deposits in a separate section. Deposit refund recorded as a negative `prepayment` entry with a `note` field. Payment form UI adds a "Тип платежа" selector.
+
+---
+
+## Phase 5 — Advanced UX
+
+### 5.1 Dark Mode
+
+Tailwind `darkMode: 'class'` strategy (set in `tailwind.config.js`). A toggle button in the top-right nav bar:
+- Adds/removes `dark` class on `<html>`
+- Saves preference to `localStorage` (`theme: 'dark' | 'light'`)
+- An inline `<script>` in `<head>` (before render) reads `localStorage` and applies the class immediately — prevents flash of wrong theme
+
+All existing Blade views get `dark:` variants added to: backgrounds (`dark:bg-slate-900`), cards (`dark:bg-slate-800`), text (`dark:text-slate-100`), borders (`dark:border-slate-700`), inputs, nav, tables.
+
+---
+
+### 5.2 Command Palette (Ctrl+K / Cmd+K)
+
+Alpine.js component registered globally in `layouts/app.blade.php`. Triggered by keyboard shortcut or a magnifying glass icon in the nav bar.
+
+**Behavior:**
+- Overlay modal with a text input, auto-focused on open
+- **Static navigation commands** (no typing needed): "Новое бронирование", "Календарь", "Горничная", "Финансы", "Сотрудники", "Новый гость" — filtered client-side as user types
+- **Live search** (after 2+ characters): `GET /search?q=...` — queries guests (name, phone), bookings (reference number, guest name), rooms (number, floor) — returns top 10 results as JSON, grouped by type with icons
+- Enter or click on result navigates; Escape closes
+- No external library — pure Alpine.js + HTML
+
+**Search endpoint:** `SearchController@index` — queries 3 models with LIMIT 4 each, returns merged array.
+
+---
+
+### 5.3 Drag-and-Drop Gantt Calendar
+
+Extends Phase 1 Gantt calendar. No new JS library — pure HTML5 drag events + Alpine.js.
+
+- Booking bars get `draggable="true"` attribute (only `pending` and `confirmed` bookings; `checked_in` bars are not draggable)
+- Empty room-day cells are drop targets (`@dragover`, `@drop` Alpine handlers)
+- On drop: `fetch()` PATCH to `PATCH /bookings/{booking}/move` with `{ room_id, check_in, check_out }` (same dates, different room)
+- Server validates: room available, correct type match is not enforced (staff can move to any room), uses `lockForUpdate()` for concurrency
+- On success: bar re-renders in new position via Alpine reactive data
+- On failure: toast shows error (e.g. "Номер занят")
+- Visual ghost during drag shows translucent bar in target row
+
+---
+
+### 5.4 Kanban Board for Maintenance
+
+Replaces the default table view at `/maintenance` with a 3-column board.
+
+**Columns:** Открыто → В работе → Решено
+
+**Card content:** title, room number, priority badge (colored), assigned staff name, created-at.
+
+**Drag behavior:** HTML5 drag + Alpine.js. Dropping a card into a column triggers `PATCH /maintenance/{req}/status` with `{ status }`. Optimistic UI — card moves immediately, reverts on error.
+
+**Toggle:** "Таблица / Доска" view switch in the page header, preference saved to `localStorage`.
+
+---
+
+### 5.5 Smart Room Auto-Suggest
+
+On the booking create form, after room type and dates are selected, an AJAX call fires:
+`GET /rooms/suggest?type_id=X&check_in=Y&check_out=Z&guest_id=G`
+
+**Ranking logic in `RoomSuggestService`:**
+1. If returning guest (`guest_id` provided) — their most recent room first (if available for dates)
+2. 1-night stay — room with most recent `inspected_at` timestamp (minimize disruption to long-stay rooms)
+3. Default — distribute across floors (room on least-occupied floor of matching type)
+
+Returns up to 3 rooms with a reason label: "Прошлый визит гостя", "Свежеубрана", "Меньше соседей".
+
+Shown as a "Рекомендуем" panel above the full room dropdown. Staff can ignore and pick any room. Panel hidden if no suggestions available.
+
+---
+
+## Phase 6 — Automations & Email
+
+### 6.1 Email Infrastructure
+
+Laravel Mail with Gmail SMTP. Config in `.env`:
+```
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS="info@chamber.uz"
+MAIL_FROM_NAME="OSG"
+```
+`MAIL_USERNAME` and `MAIL_PASSWORD` in `.env` only — never committed.
+
+Two Mailable classes:
+- `App\Mail\GuestBookingConfirmed`
+- `App\Mail\GuestFeedbackRequest`
+
+Both use Blade templates at `resources/views/emails/`. Plain HTML tables for maximum email client compatibility — no Tailwind in email templates. Sent synchronously (no queue needed at this scale).
+
+---
+
+### 6.2 Night Audit
+
+**Scheduled command:** `php artisan audit:night` — registered in `routes/console.php` to run daily at `02:00`.
+
+**What it does:**
+1. For every `checked_in` booking: creates a `booking_charge` record with `category = room_night`, `amount` = that night's rate via `PricingService`, `description` = "Проживание [date]", `created_by` = system user (ID 1 / owner)
+2. For every `pending` booking with `check_in = today` not yet checked in: flags status as `no_show` (new `BookingStatus` value)
+3. Writes an `activity_log` summary: "Ночной аудит: 12 начислений, 1 неявка"
+
+**Manual trigger:** `POST /audit/run` (owner only) — runs the same command via `Artisan::call()` for testing during the day.
+
+**Important:** The nightly `room_night` charges are the authoritative revenue record. The booking wizard still shows an estimated total based on nights × price for UX purposes, but the actual folio is built from individual `booking_charge` rows.
+
+---
+
+### 6.3 Magic Links + Upsells
+
+When a booking moves to `confirmed` status, a signed URL is generated via `URL::signedRoute()`, valid 30 days:
+`GET /guest/booking/{booking}` — no login required (public, signed).
+
+**Staff UI:** "Поделиться ссылкой" button on `bookings/show` copies the URL to clipboard. Staff sends via WhatsApp/Telegram manually.
+
+**Guest page content:**
+- Booking summary: room, dates, total estimate, balance due
+- **Upsell grid**: up to 6 cards pulled from a config array (`config('hotel.upsells')`): breakfast, airport transfer, parking, spa, laundry, late checkout. Price per upsell defined in config.
+- One-click upsell adds a `booking_charge` record via `POST /guest/booking/{booking}/upsell` (also signed)
+- Page refreshes total after upsell
+
+**Expiry:** After 30 days or after `checked_out`, the signed URL returns a clean "Срок ссылки истёк" page (no error stack).
+
+---
+
+### 6.4 Post-Stay Feedback Flow
+
+**Scheduled command:** `php artisan feedback:send` — runs daily at `10:00`.
+
+Finds bookings where:
+- `status = checked_out`
+- `checked_out_at` between yesterday 00:00 and yesterday 23:59
+- `feedback_sent = false`
+- Guest has a non-null email
+
+Sends `GuestFeedbackRequest` mailable, sets `feedback_sent = true` on the booking.
+
+**Feedback page:** `GET /feedback/{booking}` — signed URL, 14-day expiry.
+- Alpine.js 1–5 star rating component
+- Optional comment textarea (max 500 chars)
+- Submit → stores in `guest_reviews` table
+
+**Post-submit routing:**
+- Rating ≥ 4 → redirect to `config('hotel.review_url')` (Google Maps / TripAdvisor)
+- Rating ≤ 3 → redirect to a private "Спасибо, мы свяжемся с вами" page; creates an internal `notification` for the manager: "Негативный отзыв: [guest name], оценка [X]/5"
+
+**`guest_reviews` table:**
+```
+id
+booking_id      FK → bookings
+guest_id        FK → guests nullable
+rating          tinyInteger (1–5)
+comment         text nullable
+submitted_at    timestamp
+```
+
+---
+
 ## Database Migration Summary
 
 | Phase | New tables | Modified tables |
 |-------|-----------|-----------------|
-| 1 | `booking_charges`, `booking_inquiries`, `maintenance_requests` | `bookings` (+source) |
+| 1 | `booking_charges`, `booking_inquiries`, `maintenance_requests` | `bookings` (+source), `payments` (+type enum) |
 | 2 | — | — |
 | 3 | `activity_logs`, `notifications`, `shift_notes` | `rooms` (+assigned_to) |
-| 4 | `pricing_rules` | `bookings` (+invoice_number) |
+| 4 | `pricing_rules` | `bookings` (+invoice_number, +feedback_sent) |
+| 5 | — | — |
+| 6 | `guest_reviews` | — |
 
-New enums: `MaintenancePriority`, `MaintenanceStatus`, `BookingSource` (staff/client)
+New enums: `MaintenancePriority`, `MaintenanceStatus`, `BookingSource` (staff/client), `PaymentType` (prepayment/deposit)
 
-`BookingStatus` gains: `inquiry`
+`BookingStatus` gains: `inquiry`, `no_show`
+
+`RoomStatus` gains: `inspected`, `dirty`
 
 ---
 
@@ -474,10 +676,11 @@ New enums: `MaintenancePriority`, `MaintenanceStatus`, `BookingSource` (staff/cl
 ```
 # Phase 1
 GET    /calendar
-GET    /book                          (public)
-GET    /book/rooms                    (public, rate-limited)
-POST   /book                          (public, rate-limited + honeypot)
-GET    /book/confirmed/{ref}          (public)
+PATCH  /bookings/{booking}/move        (drag-and-drop room change)
+GET    /book                           (public)
+GET    /book/rooms                     (public, rate-limited)
+POST   /book                           (public, rate-limited + honeypot)
+GET    /book/confirmed/{ref}           (public)
 POST   /bookings/{booking}/charges
 DELETE /bookings/{booking}/charges/{charge}
 GET    /maintenance
@@ -487,18 +690,18 @@ GET    /maintenance/{req}
 GET    /maintenance/{req}/edit
 PUT    /maintenance/{req}
 PATCH  /maintenance/{req}/resolve
+PATCH  /maintenance/{req}/status       (Kanban column change)
+GET    /notifications/count            (lightweight polling endpoint)
 
 # Phase 2
 GET    /reports
 GET    /reports/forecast
-GET    /reports/{type}/export         (PDF/CSV)
+GET    /reports/{type}/export          (PDF/CSV)
 
 # Phase 3
 GET    /activity
 GET    /notifications
 PATCH  /notifications/read-all
-GET    /shift-notes
-POST   /shift-notes
 
 # Phase 4
 GET    /bookings/{booking}/invoice
@@ -509,6 +712,19 @@ GET    /pricing-rules/{rule}/edit
 PUT    /pricing-rules/{rule}
 DELETE /pricing-rules/{rule}
 GET    /finances/debt
+POST   /audit/run                      (owner only, manual night audit)
+
+# Phase 5
+GET    /search                         (command palette live search)
+GET    /rooms/suggest                  (smart room suggest)
+GET    /shift-notes
+POST   /shift-notes
+
+# Phase 6
+GET    /guest/booking/{booking}        (public signed — magic link)
+POST   /guest/booking/{booking}/upsell (public signed — add upsell charge)
+GET    /feedback/{booking}             (public signed — feedback form)
+POST   /feedback/{booking}             (public signed — submit feedback)
 ```
 
 ---
@@ -517,10 +733,11 @@ GET    /finances/debt
 
 | Service | Responsibility |
 |---------|---------------|
-| `RoomAvailabilityService` | Check room availability for date range, exclude booking ID |
-| `BookingTotalsService` | Grand total = room cost + charges; used by show, invoice, debt tracker |
+| `RoomAvailabilityService` | Check room availability for date range, exclude booking ID; used with `lockForUpdate()` |
+| `BookingTotalsService` | Grand total = room cost + charges; `balanceDue()` excludes deposits |
 | `PricingService` | Apply pricing rules to a room type + date range |
-| `NotificationService` | Generate on-demand notifications per user |
+| `NotificationService` | Generate on-demand notifications per user (also called by polling endpoint) |
+| `RoomSuggestService` | Rank available rooms by returning-guest, recency, floor distribution |
 
 ---
 
@@ -530,14 +747,15 @@ GET    /finances/debt
 |---------|---------|---------|-------|
 | `barryvdh/laravel-dompdf` | ^3.0 | PDF generation (invoices + reports) | 2 + 4 |
 
-No other new dependencies. Chart.js loaded via CDN.
+No other new Composer dependencies. Chart.js loaded via CDN.
 
 ---
 
 ## Out of Scope
 
-- Email / SMS notifications (requires SMTP/Twilio setup — separate project)
-- Real-time websocket notifications
+- Group bookings / master folios
+- QR code scanning (webcam)
+- Real-time WebSockets (using 30s polling instead)
 - Channel management (Booking.com, Airbnb sync)
 - Mobile app / PWA
 - Multi-property support
