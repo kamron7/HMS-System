@@ -18,6 +18,7 @@ class PaymentController extends Controller
 
         $validated = $request->validate([
             'amount'  => ['required', 'numeric', 'min:0.01'],
+            'type'    => ['required', 'string', Rule::in(['prepayment', 'deposit'])],
             'method'  => ['required', 'string', Rule::in(['cash', 'card', 'transfer', 'other'])],
             'paid_at' => ['required', 'date'],
             'notes'   => ['nullable', 'string', 'max:500'],
@@ -25,6 +26,7 @@ class PaymentController extends Controller
 
         $booking->payments()->create([
             'amount'  => $validated['amount'],
+            'type'    => $validated['type'],
             'method'  => $validated['method'],
             'paid_at' => $validated['paid_at'],
             'notes'   => $validated['notes'] ?? null,

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\GuestTag;
 use Database\Factories\GuestFactory;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -20,7 +21,15 @@ class Guest extends Model
         'email',
         'passport_number',
         'nationality',
+        'tag',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'tag' => GuestTag::class,
+        ];
+    }
 
     public function bookings(): HasMany
     {

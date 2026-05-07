@@ -33,7 +33,7 @@ class LoginController extends Controller
 
         \Illuminate\Support\Facades\Auth::login($user);
         $request->session()->regenerate();
-        return redirect()->intended('/dashboard');
+        return redirect()->intended(route($user->role->homeRoute()));
     }
 
     public function logout(Request $request)

@@ -2,14 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\BookingStatus;
+use App\Enums\PaymentType;
+use App\Models\Booking;
 use App\Models\Expense;
 use App\Models\Payment;
+use App\Services\BookingTotalsService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class FinancesController extends Controller
 {
+    public function __construct(private BookingTotalsService $totals) {}
+
     private const CATEGORIES = [
         'salary'      => 'Зарплата',
         'utilities'   => 'Коммунальные услуги',
@@ -128,5 +134,58 @@ class FinancesController extends Controller
             'categories'     => self::CATEGORIES,
             'paymentMethods' => self::PAYMENT_METHODS,
         ]);
+    }
+
+    public function debt(): View
+    {
+        $yesterday = today()->subDay();
+
+        // Candidate bookings: checked_out or checked_in
+        $bookings = Booking::with(['guest', 'room.roomType', 'payments', 'charges'])
+            ->whereIn('status', [BookingStatus::CheckedOut->value, BookingStatus::CheckedIn->value])
+            ->get();
+
+        $debtors = $bookings->filter(function (Booking $booking) use ($yesterday) {
+            $grandTotal = $this->totals->grandTotal($booking);
+            $paid       = $this->totals->paidAmount($booking);
+            $balance    = $grandTotal - $paid;
+
+            if ($balance <= 0) {
+                return false;
+            }
+
+            if ($booking->status->value === BookingStatus::CheckedOut->value) {
+                // Has outstanding balance after checkout
+                return true;
+            }
+
+            // checked_in: no prepayment AND check_in_date before yesterday
+            if ($booking->status->value === BookingStatus::CheckedIn->value) {
+                $hasPrepayment = $booking->payments
+                    ->where('type', PaymentType::Prepayment->value)
+                    ->sum('amount') > 0;
+
+                return ! $hasPrepayment && $booking->check_in_date->lt($yesterday);
+            }
+
+            return false;
+        })->map(function (Booking $booking) {
+            $grandTotal  = $this->totals->grandTotal($booking);
+            $paid        = $this->totals->paidAmount($booking);
+            $balanceDue  = max(0, $grandTotal - $paid);
+            $daysOverdue = $booking->check_out_date->isPast()
+                ? (int) $booking->check_out_date->diffInDays(today())
+                : 0;
+
+            return (object) [
+                'booking'     => $booking,
+                'grand_total' => $grandTotal,
+                'paid'        => $paid,
+                'balance_due' => $balanceDue,
+                'days_overdue'=> $daysOverdue,
+            ];
+        })->sortByDesc('days_overdue')->values();
+
+        return view('finances.debt', compact('debtors'));
     }
 }

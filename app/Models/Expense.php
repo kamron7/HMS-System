@@ -18,6 +18,7 @@ class Expense extends Model
         'amount',
         'expense_date',
         'created_by',
+        'payment_method',
     ];
 
     protected function casts(): array
